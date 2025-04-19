@@ -9,6 +9,8 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+
+	"github.com/efeaslansoyler/go-wordlistgen/internal/generator"
 )
 
 const (
@@ -104,6 +106,19 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			switch s {
 			case "enter":
 				// TODO: Add password generation logic here
+				opts := generator.Options{
+					InputFirstName:    strings.Fields(m.inputs[inputFirstName].Value()),
+					InputLastName:     strings.Fields(m.inputs[inputLastName].Value()),
+					InputBirthday:     strings.Split(m.inputs[inputBirthday].Value(), "/"),
+					InputRelatedWords: strings.Split(m.inputs[inputRelatedWords].Value(), ","),
+					InputMinLength:    m.inputs[inputMinLength].Value(),
+					InputMaxLength:    m.inputs[inputMaxLength].Value(),
+				}
+				err := generator.Run(opts)
+				if err != nil {
+					fmt.Printf("could not generate password: %v", err)
+					os.Exit(1)
+				}
 				return m, tea.Quit
 			case "b", "backspace":
 				m.done = false
@@ -159,7 +174,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 			return m, tea.Batch(cmds...)
-		case "r":
+		case "ctrl+r":
 			for i := range m.inputs {
 				if m.inputs[i].Value() != "" {
 					m.inputs[i].Reset()
@@ -306,7 +321,7 @@ func (m *model) View() string {
 	}
 
 	help := placeholderStyle.Render(
-		"\n(tab/shift+tab to move, enter to submit, r to clear, esc to quit)\n",
+		"\n(tab/shift+tab to move, enter to submit, ctrl+r to clear, esc to quit)\n",
 	)
 
 	return localFormStyle.Render(b.String() + help)
