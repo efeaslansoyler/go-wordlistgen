@@ -24,32 +24,94 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"strings"
 
+	"github.com/efeaslansoyler/go-wordlistgen/internal/generator"
 	"github.com/efeaslansoyler/go-wordlistgen/internal/tui"
 	"github.com/spf13/cobra"
 )
 
-var cliMode bool
+var (
+	// CLI mode flags
+	cliMode        bool
+	firstName      string
+	lastName       string
+	birthday       string
+	relatedWords   string
+	minLength      string
+	maxLength      string
+	outputFilePath string
+	enableLeet     bool
+	enableCap      bool
+)
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "go-wordlistgen",
-	Short: "A brief description of your application",
-	Long: `A longer description that spans multiple lines and likely contains
-examples and usage of using your application. For example:
+	Short: "Generate wordlists for password cracking based on personal information",
+	Long: `Go-Wordlistgen is a tool that creates customized wordlists for password cracking.
+It generates potential passwords by combining personal information such as names,
+birth dates, and related words with common variations like capitalization and 
+leet (1337) speak substitutions.
 
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
-	// Uncomment the following line if your bare application
-	// has an action associated with it:
+You can use either the interactive TUI mode (default) or the CLI mode with flags.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		if cliMode {
-			fmt.Println("Running in CLI mode")
+			runCLIMode()
 		} else {
 			tui.Start()
 		}
 	},
+}
+
+func runCLIMode() {
+	if firstName == "" || lastName == "" {
+		fmt.Println("Error: both first name and last name are required")
+		fmt.Println("Use --help for more information")
+		os.Exit(1)
+	}
+
+	firstNames := strings.Fields(firstName)
+	lastNames := strings.Fields(lastName)
+	birthdaySlice := []string{}
+
+	if birthday != "" {
+		birthdaySlice = strings.Split(birthday, "/")
+	}
+
+	var relatedWordsSlice []string
+	if relatedWords != "" {
+		for _, word := range strings.Split(relatedWords, ",") {
+			if trimmed := strings.TrimSpace(word); trimmed != "" {
+				relatedWordsSlice = append(relatedWordsSlice, trimmed)
+			}
+		}
+	}
+
+	opts := generator.Options{
+		InputFirstName:    firstNames,
+		InputLastName:     lastNames,
+		InputBirthday:     birthdaySlice,
+		InputRelatedWords: relatedWordsSlice,
+		InputMinLength:    minLength,
+		InputMaxLength:    maxLength,
+		EnableLeet:        enableLeet,
+		EnableCapitalize:  enableCap,
+		OutputFilePath:    outputFilePath,
+	}
+
+	fmt.Println("Generating wordlist...")
+	err := generator.Run(opts)
+	if err != nil {
+		fmt.Printf("Error generating wordlist: %v\n", err)
+		os.Exit(1)
+	}
+
+	outputPath := outputFilePath
+	if outputPath == "" {
+		outputPath = "wordlist.txt"
+	}
+	fmt.Printf("Wordlist successfully generated at: %s\n", outputPath)
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
@@ -62,13 +124,19 @@ func Execute() {
 }
 
 func init() {
-	// Here you will define your flags and configuration settings.
-	// Cobra supports persistent flags, which, if defined here,
-	// will be global for your application.
+	// Define flags for CLI mode
+	rootCmd.Flags().BoolVarP(&cliMode, "cli", "c", false, "Run in CLI mode instead of TUI mode")
 
-	// rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.go-wordlistgen.yaml)")
+	// Input flags
+	rootCmd.Flags().StringVarP(&firstName, "firstname", "f", "", "First name (and middle name if needed)")
+	rootCmd.Flags().StringVarP(&lastName, "lastname", "l", "", "Last name")
+	rootCmd.Flags().StringVarP(&birthday, "birthday", "b", "", "Birthday in format DD/MM/YYYY (or similar, use / to separate)")
+	rootCmd.Flags().StringVarP(&relatedWords, "words", "w", "", "Related words separated by commas")
+	rootCmd.Flags().StringVar(&minLength, "min", "", "Minimum password length (default 6)")
+	rootCmd.Flags().StringVar(&maxLength, "max", "", "Maximum password length (default 12)")
+	rootCmd.Flags().StringVarP(&outputFilePath, "output", "o", "", "Output file path (default wordlist.txt)")
 
-	// Cobra also supports local flags, which will only run
-	// when this action is called directly.
-	rootCmd.Flags().BoolVarP(&cliMode, "cli", "c", false, "Run in CLI mode")
+	// Options flags
+	rootCmd.Flags().BoolVar(&enableLeet, "leet", false, "Enable leet speak variations (1337)")
+	rootCmd.Flags().BoolVar(&enableCap, "caps", false, "Enable capitalization variations")
 }
