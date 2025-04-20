@@ -20,6 +20,9 @@ const (
 	inputRelatedWords
 	inputMinLength
 	inputMaxLength
+	focusLeetBox
+	focusCapitalizeBox
+	focusSubmitButton
 	numInputs
 )
 
@@ -42,11 +45,13 @@ var (
 )
 
 type model struct {
-	focusIndex int
-	inputs     []textinput.Model
-	errMsg     string
-	done       bool
-	width      int
+	focusIndex       int
+	inputs           []textinput.Model
+	enableLeet       bool
+	enableCapitalize bool
+	errMsg           string
+	done             bool
+	width            int
 }
 
 type inputConfig struct {
@@ -65,7 +70,7 @@ var inputConfigs = []inputConfig{
 
 func NewModel() *model {
 	m := &model{
-		inputs: make([]textinput.Model, numInputs),
+		inputs: make([]textinput.Model, inputMaxLength+1),
 	}
 
 	for i, config := range inputConfigs {
@@ -105,14 +110,22 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.done {
 			switch s {
 			case "enter":
-				// TODO: Add password generation logic here
+				relatedWordsInput := strings.Split(m.inputs[inputRelatedWords].Value(), ",")
+				trimmedRelatedWords := make([]string, 0, len(relatedWordsInput))
+				for _, word := range relatedWordsInput {
+					if trimmed := strings.TrimSpace(word); trimmed != "" {
+						trimmedRelatedWords = append(trimmedRelatedWords, trimmed)
+					}
+				}
 				opts := generator.Options{
 					InputFirstName:    strings.Fields(m.inputs[inputFirstName].Value()),
 					InputLastName:     strings.Fields(m.inputs[inputLastName].Value()),
 					InputBirthday:     strings.Split(m.inputs[inputBirthday].Value(), "/"),
-					InputRelatedWords: strings.Split(m.inputs[inputRelatedWords].Value(), ","),
+					InputRelatedWords: trimmedRelatedWords,
 					InputMinLength:    m.inputs[inputMinLength].Value(),
 					InputMaxLength:    m.inputs[inputMaxLength].Value(),
+					EnableLeet:        m.enableLeet,
+					EnableCapitalize:  m.enableCapitalize,
 				}
 				err := generator.Run(opts)
 				if err != nil {
@@ -133,7 +146,15 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "tab", "shift+tab", "enter", "up", "down":
 			s := msg.String()
 
-			if s == "enter" && m.focusIndex == len(m.inputs)-1 {
+			if s == "enter" && m.focusIndex == focusLeetBox {
+				m.enableLeet = !m.enableLeet
+				return m, nil
+			} else if s == "enter" && m.focusIndex == focusCapitalizeBox {
+				m.enableCapitalize = !m.enableCapitalize
+				return m, nil
+			}
+
+			if s == "enter" && m.focusIndex == focusSubmitButton {
 				if idx, err := validateInputs(m.inputs); err != nil {
 					m.errMsg = err.Error()
 					m.focusIndex = idx
@@ -159,17 +180,17 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.focusIndex++
 			}
 
-			if m.focusIndex >= len(m.inputs) {
+			if m.focusIndex >= numInputs {
 				m.focusIndex = 0
 			} else if m.focusIndex < 0 {
-				m.focusIndex = len(m.inputs) - 1
+				m.focusIndex = numInputs - 1
 			}
 
 			cmds := make([]tea.Cmd, len(m.inputs))
 			for i := range m.inputs {
-				if i == m.focusIndex {
+				if i == m.focusIndex && m.focusIndex < numInputs {
 					cmds[i] = m.inputs[i].Focus()
-				} else {
+				} else if i < len(m.inputs) {
 					m.inputs[i].Blur()
 				}
 			}
@@ -297,13 +318,15 @@ func (m *model) View() string {
 			}
 		}
 		summary := fmt.Sprintf(
-			"Form Submitted!\n\nFirstname: %s\nLastname: %s\nBirthday: %s\nRelated words: %s\nMin password length: %d\nMax password length: %d\n\nPress enter to generate password.\nPress b to go back and edit.",
+			"Form Submitted!\n\nFirstname: %s\nLastname: %s\nBirthday: %s\nRelated words: %s\nMin password length: %d\nMax password length: %d\nEnable leet variants: %v\nEnable capitalized variants: %v\n\nPress enter to generate password.\nPress b to go back and edit.",
 			m.inputs[0].Value(),
 			m.inputs[1].Value(),
 			m.inputs[2].Value(),
 			m.inputs[3].Value(),
 			minLength,
 			maxLength,
+			m.enableLeet,
+			m.enableCapitalize,
 		)
 		return localFormStyle.Render(summary)
 	}
@@ -320,8 +343,52 @@ func (m *model) View() string {
 		b.WriteString(errorStyle.Render("\n" + m.errMsg + "\n"))
 	}
 
+	seperatorStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240")).Width(m.width / 2)
+
+	b.WriteString("\n")
+	b.WriteString(seperatorStyle.Render(strings.Repeat("─", m.width/2)))
+	b.WriteString("\n")
+
+	leetChecked := "[ ]"
+	if m.enableLeet {
+		leetChecked = "[X]"
+	}
+	caseChecked := "[ ]"
+	if m.enableCapitalize {
+		caseChecked = "[X]"
+	}
+
+	leetText := "Enable leet variants"
+	caseText := "Enable capitalized variants"
+
+	leetCheckBox := fmt.Sprintf("%s %s", leetChecked, placeholderStyle.Render(leetText))
+	caseCheckBox := fmt.Sprintf("%s %s", caseChecked, placeholderStyle.Render(caseText))
+
+	if m.focusIndex == focusLeetBox {
+		leetCheckBox = focusedStyle.Render(leetCheckBox)
+	}
+	if m.focusIndex == focusCapitalizeBox {
+		caseCheckBox = focusedStyle.Render(caseCheckBox)
+	}
+
+	b.WriteString(leetCheckBox + "\n")
+	b.WriteString(caseCheckBox + "\n")
+
+	b.WriteString("\n")
+
+	submitButton := "[ Submit ]"
+
+	if m.focusIndex == focusSubmitButton {
+		submitButton = focusedStyle.Render(submitButton)
+	} else {
+		submitButton = placeholderStyle.Render(submitButton)
+	}
+
+	buttonStyle := lipgloss.NewStyle().Width(m.width / 2)
+	b.WriteString(buttonStyle.Render(submitButton) + "\n")
+
 	help := placeholderStyle.Render(
-		"\n(tab/shift+tab to move, enter to submit, ctrl+r to clear, esc to quit)\n",
+		"\n(tab/shift+tab to move, enter to toggle checkboxes or submit, ctrl+r to clear, esc to quit)\n",
 	)
 
 	return localFormStyle.Render(b.String() + help)

@@ -3,6 +3,8 @@ package generator
 import (
 	"os"
 	"strconv"
+	"strings"
+	"unicode"
 )
 
 type Options struct {
@@ -12,6 +14,16 @@ type Options struct {
 	InputRelatedWords []string
 	InputMinLength    string
 	InputMaxLength    string
+	EnableLeet        bool
+	EnableCapitalize  bool
+}
+
+var leetMap = map[rune]string{
+	'a': "4",
+	'e': "3",
+	'i': "1",
+	'o': "0",
+	's': "5",
 }
 
 func Run(opts Options) error {
@@ -19,8 +31,15 @@ func Run(opts Options) error {
 	words := []string{}
 	words = append(words, inputs...)
 
-	for n := 2; n <= len(inputs); n++ {
+	for n := 2; n <= 3; n++ {
 		words = append(words, combineWordsN(inputs, n)...)
+	}
+
+	if opts.EnableLeet {
+		words = append(words, leetVariants(words)...)
+	}
+	if opts.EnableCapitalize {
+		words = append(words, caseVariants(words)...)
 	}
 
 	words = removeDuplicates(words)
@@ -33,12 +52,36 @@ func Run(opts Options) error {
 	return nil
 }
 
+func capitalize(word string) string {
+	if len(word) == 0 {
+		return ""
+	}
+	return strings.ToUpper(string(word[0])) + strings.ToLower(word[1:])
+}
+
 func collectAllInputs(opts Options) ([]string, int, int) {
 	words := []string{}
-	words = append(words, opts.InputFirstName...)
-	words = append(words, opts.InputLastName...)
-	words = append(words, opts.InputBirthday...)
-	words = append(words, opts.InputRelatedWords...)
+
+	appendWithCap := func(list []string) {
+		for _, w := range list {
+			words = append(words, w)
+			capW := capitalize(w)
+			if capW != w {
+				words = append(words, capW)
+			}
+		}
+	}
+
+	appendWithCap(opts.InputFirstName)
+	appendWithCap(opts.InputLastName)
+	appendWithCap(opts.InputRelatedWords)
+
+	if len(opts.InputBirthday) > 0 {
+		fullBirthday := strings.Join(opts.InputBirthday, "")
+		words = append(words, fullBirthday)
+		words = append(words, opts.InputBirthday...)
+	}
+
 	minLength := 6
 	maxLength := 12
 	if opts.InputMinLength != "" {
@@ -72,7 +115,45 @@ func combineWordsN(words []string, n int) []string {
 	}
 	used := make([]bool, len(words))
 	combine([]string{}, used)
-	return result
+	return removeDuplicates(result)
+}
+
+func leetVariants(words []string) []string {
+	var result []string
+	for _, word := range words {
+		leetWord := ""
+		for _, char := range word {
+			lowerChar := unicode.ToLower(char)
+			if leetChar, ok := leetMap[lowerChar]; ok {
+				leetWord += leetChar
+			} else {
+				leetWord += string(char)
+			}
+		}
+		if leetWord != word {
+			result = append(result, leetWord)
+		}
+	}
+	return removeDuplicates(result)
+}
+
+func caseVariants(words []string) []string {
+	var result []string
+	for _, word := range words {
+		result = append(result, word)
+		upperWord := ""
+		for _, char := range word {
+			if unicode.IsLower(char) {
+				upperWord += string(unicode.ToUpper(char))
+			} else {
+				upperWord += string(unicode.ToLower(char))
+			}
+		}
+		if upperWord != word {
+			result = append(result, upperWord)
+		}
+	}
+	return removeDuplicates(result)
 }
 
 func removeDuplicates(words []string) []string {
