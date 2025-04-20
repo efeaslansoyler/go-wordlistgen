@@ -14,6 +14,7 @@ type Options struct {
 	InputRelatedWords []string
 	InputMinLength    string
 	InputMaxLength    string
+	OutputFilePath    string
 	EnableLeet        bool
 	EnableCapitalize  bool
 }
@@ -45,7 +46,7 @@ func Run(opts Options) error {
 	words = removeDuplicates(words)
 	words = filterWordsByLength(words, minLength, maxLength)
 
-	err := saveToFile(words)
+	err := saveToFile(words, opts.OutputFilePath)
 	if err != nil {
 		return err
 	}
@@ -178,8 +179,12 @@ func filterWordsByLength(words []string, minLength, maxLength int) []string {
 	return filtered
 }
 
-func saveToFile(words []string) error {
-	file, err := os.Create("wordlist.txt")
+func saveToFile(words []string, filepath string) error {
+	if filepath == "" {
+		filepath = "wordlist.txt"
+	}
+
+	file, err := os.Create(filepath)
 	if err != nil {
 		return err
 	}

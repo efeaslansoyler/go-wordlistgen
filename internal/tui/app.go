@@ -20,6 +20,7 @@ const (
 	inputRelatedWords
 	inputMinLength
 	inputMaxLength
+	inputOutputFilePath
 	focusLeetBox
 	focusCapitalizeBox
 	focusSubmitButton
@@ -66,11 +67,12 @@ var inputConfigs = []inputConfig{
 	{placeholder: "related words that you want to add (optional, separate with , if you enter more than one)", focused: false},
 	{placeholder: "min password length (optional, default 6)", focused: false},
 	{placeholder: "max password length (optional, default 12)", focused: false},
+	{placeholder: "output file path (optional, default ./wordlist.txt)", focused: false},
 }
 
 func NewModel() *model {
 	m := &model{
-		inputs: make([]textinput.Model, inputMaxLength+1),
+		inputs: make([]textinput.Model, inputOutputFilePath+1),
 	}
 
 	for i, config := range inputConfigs {
@@ -124,13 +126,15 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					InputRelatedWords: trimmedRelatedWords,
 					InputMinLength:    m.inputs[inputMinLength].Value(),
 					InputMaxLength:    m.inputs[inputMaxLength].Value(),
+					OutputFilePath:    m.inputs[inputOutputFilePath].Value(),
 					EnableLeet:        m.enableLeet,
 					EnableCapitalize:  m.enableCapitalize,
 				}
 				err := generator.Run(opts)
 				if err != nil {
-					fmt.Printf("could not generate password: %v", err)
-					os.Exit(1)
+					m.errMsg = fmt.Sprintf("could not generate password: %v", err)
+					m.done = false
+					return m, nil
 				}
 				return m, tea.Quit
 			case "b", "backspace":
@@ -317,14 +321,21 @@ func (m *model) View() string {
 				maxLength = v
 			}
 		}
+
+		outputPath := "wordlist.txt"
+		if path := strings.TrimSpace(m.inputs[inputOutputFilePath].Value()); path != "" {
+			outputPath = path
+		}
+
 		summary := fmt.Sprintf(
-			"Form Submitted!\n\nFirstname: %s\nLastname: %s\nBirthday: %s\nRelated words: %s\nMin password length: %d\nMax password length: %d\nEnable leet variants: %v\nEnable capitalized variants: %v\n\nPress enter to generate password.\nPress b to go back and edit.",
+			"Form Submitted!\n\nFirstname: %s\nLastname: %s\nBirthday: %s\nRelated words: %s\nMin password length: %d\nMax password length: %d\nOutput file: %s\nEnable leet variants: %v\nEnable capitalized variants: %v\n\nPress enter to generate password.\nPress b to go back and edit.",
 			m.inputs[0].Value(),
 			m.inputs[1].Value(),
 			m.inputs[2].Value(),
 			m.inputs[3].Value(),
 			minLength,
 			maxLength,
+			outputPath,
 			m.enableLeet,
 			m.enableCapitalize,
 		)
